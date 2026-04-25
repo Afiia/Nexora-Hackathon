@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nexora Nexus — Fraud Detector</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --accent: #00d4ff;
+      --accent2: #0088ff;
+      --warn: #ffaa00;
+      --danger: #ff3860;
+      --text: #e8e8f0;
+      --muted: #5a5a7a;
+      --safe: #00f5a0;
+      --glow-safe: 0 0 30px rgba(0,212,255,0.25);
+      --glow-warn: 0 0 30px rgba(255,170,0,0.35);
+      --glow-danger: 0 0 30px rgba(255,56,96,0.35);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 32px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      animation: fadeDown 0.7s ease both;
+    }
+
+    .header .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 99px;
+      padding: 6px 16px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 18px;
+    }
+
+    .header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #e8e8f0 30%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Main card */
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      animation: fadeUp 0.7s 0.15s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,196,255,0.4), transparent);
+    }
+
+    /* Waveform visualizer */
+    .waveform-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 72px;
+      gap: 4px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 0 16px;
+      overflow: hidden;
+    }
+
+    .wave-bar {
+      width: 3px;
+      border-radius: 3px;
+      background: var(--muted);
+      height: 8px;
+      transition: background 0.3s;
+    }
+
+    .wave-bar.active {
+      background: var(--accent);
+      animation: wavePulse var(--dur, 0.6s) ease-in-out infinite alternate;
+      animation-delay: var(--delay, 0s);
+    }
+
+    @keyframes wavePulse {
+      from { height: 6px; }
+      to { height: var(--h, 36px); }
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 20px;
+      border-radius: 12px;
+      border: none;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-record {
+      background: rgba(0,212,255,0.1);
+      border: 1px solid rgba(0,212,255,0.3);
+      color: var(--accent);
+    }
+    .btn-record:hover:not(:disabled) {
+      background: rgba(0,212,255,0.18);
+      box-shadow: var(--glow-safe);
+    }
+    .btn-record.recording {
+      background: rgba(255,56,96,0.12);
+      border-color: rgba(255,56,96,0.4);
+      color: var(--danger);
+      animation: recordPulse 1.2s ease infinite;
+    }
+
+    .btn-upload {
+      background: rgba(0,136,255,0.07);
+      border: 1px solid rgba(0,136,255,0.2);
+      color: var(--accent2);
+    }
+    .btn-upload:hover:not(:disabled) {
+      background: rgba(0,136,255,0.14);
+      box-shadow: 0 0 30px rgba(0,136,255,0.2);
+    }
+
+    .btn-analyze {
+      background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,136,255,0.15));
+      border: 1px solid rgba(0,212,255,0.25);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .btn-analyze:hover:not(:disabled) {
+      background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,136,255,0.25));
+      box-shadow: var(--glow-safe);
+      transform: translateY(-1px);
+    }
+
+    @keyframes recordPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,56,96,0.4); }
+      50% { box-shadow: 0 0 20px 4px rgba(255,56,96,0.2); }
+    }
+
+    .btn-icon {
+      width: 16px; height: 16px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    #fileInput { display: none; }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(0,136,255,0.05);
+      border: 1px solid rgba(0,136,255,0.15);
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--accent2);
+      display: none;
+    }
+
+    .file-info.visible { display: flex; }
+
+    .result-panel {
+      border-radius: 14px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .result-panel.visible { display: flex; }
+
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 99px;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      width: fit-content;
+    }
+
+    .risk-badge.safe {
+      background: rgba(0,245,160,0.1);
+      border: 1px solid rgba(0,245,160,0.35);
+      color: var(--safe);
+    }
+    .risk-badge.warn {
+      background: rgba(255,170,0,0.1);
+      border: 1px solid rgba(255,170,0,0.35);
+      color: var(--warn);
+    }
+    .risk-badge.danger {
+      background: rgba(255,56,96,0.1);
+      border: 1px solid rgba(255,56,96,0.35);
+      color: var(--danger);
+    }
+
+    .transcript-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .transcript-text {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+      border-left: 2px solid var(--border);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .loader {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    .loader.visible { display: flex; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: all 0.3s;
+    }
+    .status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    .timer {
+      font-variant-numeric: tabular-nums;
+      color: var(--danger);
+      font-size: 12px;
+      display: none;
+    }
+    .timer.visible { display: inline; }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    .analyze-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .footer {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-align: center;
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+
+    svg { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-badge">
+        <svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg>
+        Nexora Secure Protocols
+      </div>
+      <h1>Nexora Nexus</h1>
+      <p>Real-time audio fraud analysis and verification</p>
+    </div>
+
+    <div class="card">
+
+      <div class="waveform-container" id="waveform">
+        </div>
+
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Ready to record or upload</span>
+        <span class="timer" id="timer">00:00</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="controls">
+        <button class="btn btn-record" id="recordBtn" onclick="toggleRecord()">
+          <span class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <circle cx="7" cy="7" r="5"/>
+            </svg>
+          </span>
+          <span id="recordLabel">Record</span>
+        </button>
+
+        <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">
+          <span class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M7 10V4M4 6.5L7 4l3 2.5M2 11h10"/>
+            </svg>
+          </span>
+          Upload
+        </button>
+        <input type="file" id="fileInput" accept="audio/*" onchange="handleFileUpload(event)"/>
+      </div>
+
+      <div class="file-info" id="fileInfo">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1H3a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L8 1z"/><path d="M8 1v5h4"/></svg>
+        <span id="fileName">No file selected</span>
+      </div>
+
+      <div class="analyze-row">
+        <button class="btn btn-analyze" id="analyzeBtn" disabled onclick="analyze()">
+          <span class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="6" cy="6" r="4"/>
+              <path d="M9.5 9.5L13 13"/>
+            </svg>
+          </span>
+          Analyze Audio
+        </button>
+      </div>
+
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        PROCESSING SECURE STREAM...
+      </div>
+
+      <div class="result-panel" id="resultPanel">
+        <div class="risk-badge" id="riskBadge"></div>
+        <div>
+          <div class="transcript-label">Transcript</div>
+          <div class="transcript-text" id="transcriptText"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer">NEXORA NEXUS v1.0 &nbsp;·&nbsp; LOCAL VERIFICATION ENGINE</div>
+  </div>
+
+  <script>
+    // Waveform setup
+    const waveform = document.getElementById('waveform');
+    const BAR_COUNT = 48;
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar';
+      bar.style.setProperty('--h', `${Math.floor(Math.random() * 32) + 8}px`);
+      bar.style.setProperty('--dur', `${(Math.random() * 0.4 + 0.35).toFixed(2)}s`);
+      bar.style.setProperty('--delay', `${(Math.random() * 0.3).toFixed(2)}s`);
+      waveform.appendChild(bar);
+    }
+
+    // State 
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioBlob = null;
+    let isRecording = false;
+    let timerInterval = null;
+    let elapsed = 0;
+
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const recordBtn = document.getElementById('recordBtn');
+    const recordLabel = document.getElementById('recordLabel');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const timer = document.getElementById('timer');
+
+    function setStatus(state, text) {
+      statusDot.className = 'status-dot ' + (state || '');
+      statusText.textContent = text;
+    }
+
+    function setWaveActive(active) {
+      document.querySelectorAll('.wave-bar').forEach(b => {
+        b.classList.toggle('active', active);
+      });
+    }
+
+    function startTimer() {
+      elapsed = 0;
+      timer.classList.add('visible');
+      timerInterval = setInterval(() => {
+        elapsed++;
+        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const s = String(elapsed % 60).padStart(2, '0');
+        timer.textContent = `${m}:${s}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+      timer.classList.remove('visible');
+    }
+
+    async function toggleRecord() {
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            stream.getTracks().forEach(t => t.stop());
+            analyzeBtn.disabled = false;
+            setStatus('active', 'Nexora ready — click Analyze');
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          recordBtn.classList.add('recording');
+          recordLabel.textContent = 'Stop';
+          setStatus('active', 'Capturing audio...');
+          setWaveActive(true);
+          startTimer();
+
+          hideResult();
+          document.getElementById('fileInfo').classList.remove('visible');
+        } catch (err) {
+          setStatus('error', 'Device access denied');
+        }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordLabel.textContent = 'Record';
+        setWaveActive(false);
+        stopTimer();
+      }
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      audioBlob = file;
+      analyzeBtn.disabled = false;
+      document.getElementById('fileInfo').classList.add('visible');
+      document.getElementById('fileName').textContent = file.name;
+      setStatus('active', 'Source loaded — click Analyze');
+      setWaveActive(true);
+      setTimeout(() => setWaveActive(false), 2000);
+      hideResult();
+    }
+
+    async function analyze() {
+      if (!audioBlob) return;
+      analyzeBtn.disabled = true;
+      document.getElementById('loader').classList.add('visible');
+      hideResult();
+      setStatus('active', 'Scanning data...');
+      setWaveActive(true);
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'audio.wav');
+
+      try {
+        const res = await fetch('/process_audio', { method: 'POST', body: formData });
+        const data = await res.json();
+        showResult(data.risk, data.text);
+      } catch (err) {
+        showResult('⚠️ SYSTEM ERROR', 'Server unreachable. Verify connection.');
+      } finally {
+        document.getElementById('loader').classList.remove('visible');
+        setWaveActive(false);
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    function showResult(risk, text) {
+      const panel = document.getElementById('resultPanel');
+      const badge = document.getElementById('riskBadge');
+      const transcript = document.getElementById('transcriptText');
+
+      badge.textContent = risk;
+      badge.className = 'risk-badge';
+      if (risk.includes('FRAUD')) {
+        badge.classList.add('danger');
+        setStatus('error', 'Fraud detected!');
+      } else if (risk.includes('SUSPICIOUS')) {
+        badge.classList.add('warn');
+        setStatus('', 'Suspicious metadata found');
+      } else if (risk.includes('SAFE')) {
+        badge.classList.add('safe');
+        setStatus('active', 'Source verified');
+      } else {
+        badge.classList.add('warn');
+        setStatus('error', 'Verification incomplete');
+      }
+
+      transcript.textContent = text || '(No data detected)';
+      panel.classList.add('visible');
+    }
+
+    function hideResult() {
+      document.getElementById('resultPanel').classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
